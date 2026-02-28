@@ -326,6 +326,41 @@ export class Container<Services = {}> {
   }
 
   /**
+   * Provides a PartialContainer and allows extracting its services to append or extend the container
+   * in a single chained call. This avoids breaking the chain when you need to fulfill a partial
+   * container just to extract dependencies for appends.
+   *
+   * @example
+   * ```ts
+   * const featureContainer = Container
+   *   .providesValue('eventHandlers', [] as EventHandler[])
+   *   .providesWith(partialContainer, (fullContainer) =>
+   *     fullContainer.append(
+   *       Injectable(eventHandlersToken, () => fullContainer.get('eventHandlerFromPartialContainer'))
+   *     )
+   *   )
+   *   .provides(...)
+   * ```
+   *
+   * @param partialContainer The PartialContainer to provide and fulfill.
+   * @param callback A function that receives the fulfilled container (this + partialContainer)
+   *                 and returns the modified container (e.g. with appends applied).
+   * @returns The container returned by the callback.
+   */
+  providesWith<
+    PartialServices,
+    PartialDependencies,
+    FulfilledDependencies extends PartialDependencies,
+    ResultServices,
+  >(
+    this: Container<FulfilledDependencies>,
+    partialContainer: PartialContainer<PartialServices, PartialDependencies>,
+    callback: (
+      fullContainer: Container<AddServices<Services, PartialServices>>
+    ) => Container<ResultServices>
+  ): Container<ResultServices>;
+
+  /**
    * Merges additional services from a given `PartialContainer` into this container,
    * creating a new `Container` instance. Services defined in the `PartialContainer` take precedence
    * in the event of token conflicts, meaning any service in the `PartialContainer` with the same token
@@ -405,6 +440,15 @@ export class Container<Services = {}> {
       } as unknown as MaybeMemoizedFactories<AddServices<Services, AdditionalServices>>);
     }
     return this.providesService(fnOrContainer);
+  }
+
+  providesWith<PartialServices, PartialDependencies, FulfilledDependencies, ResultServices>(
+    this: Container<FulfilledDependencies>,
+    partialContainer: PartialContainer<PartialServices, PartialDependencies>,
+    callback: (fullContainer: Container<AddServices<Services, PartialServices>>) => Container<ResultServices>
+  ): Container<ResultServices> {
+    const fullContainer = this.provides(partialContainer);
+    return callback(fullContainer);
   }
 
   /**

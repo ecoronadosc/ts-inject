@@ -226,6 +226,67 @@ describe("Container", () => {
     });
   });
 
+  describe("when using providesWith to provide a PartialContainer and extract dependencies in a single chain", () => {
+    test("provides the partial container and passes fulfilled container to callback", () => {
+      const eventHandlersToken = "eventHandlers" as const;
+      const pluginToken = "plugin" as const;
+
+      const partialContainer = new PartialContainer({})
+        .provides(Injectable(pluginToken, () => "plugin-from-partial"));
+
+      const result = Container.providesValue(eventHandlersToken, [] as string[])
+        .providesWith(partialContainer, (fullContainer) => {
+          expect(fullContainer.get(pluginToken)).toBe("plugin-from-partial");
+          return fullContainer.append(
+            Injectable(eventHandlersToken, () => fullContainer.get(pluginToken))
+          );
+        });
+
+      expect(result.get(pluginToken)).toBe("plugin-from-partial");
+      expect(result.get(eventHandlersToken)).toEqual(["plugin-from-partial"]);
+    });
+
+    test("allows chaining further provides after providesWith", () => {
+      const eventHandlersToken = "eventHandlers" as const;
+      const pluginToken = "plugin" as const;
+      const extraToken = "extra" as const;
+
+      const partialContainer = new PartialContainer({})
+        .provides(Injectable(pluginToken, () => "plugin-value"));
+
+      const result = Container.providesValue(eventHandlersToken, [] as string[])
+        .providesWith(partialContainer, (fullContainer) =>
+          fullContainer.append(
+            Injectable(eventHandlersToken, () => fullContainer.get(pluginToken))
+          )
+        )
+        .providesValue(extraToken, "extra-value");
+
+      expect(result.get(pluginToken)).toBe("plugin-value");
+      expect(result.get(eventHandlersToken)).toEqual(["plugin-value"]);
+      expect(result.get(extraToken)).toBe("extra-value");
+    });
+
+    test("callback can perform multiple appends using extracted services", () => {
+      const pluginsToken = "plugins" as const;
+      const serviceAToken = "serviceA" as const;
+      const serviceBToken = "serviceB" as const;
+
+      const partialContainer = new PartialContainer({})
+        .provides(Injectable(serviceAToken, () => "A"))
+        .provides(Injectable(serviceBToken, () => "B"));
+
+      const result = Container.providesValue(pluginsToken, [] as string[])
+        .providesWith(partialContainer, (fullContainer) =>
+          fullContainer
+            .append(Injectable(pluginsToken, () => fullContainer.get(serviceAToken)))
+            .append(Injectable(pluginsToken, () => fullContainer.get(serviceBToken)))
+        );
+
+      expect(result.get(pluginsToken)).toEqual(["A", "B"]);
+    });
+  });
+
   describe("when appending a Service to an existing array of Services", () => {
     test("appends value to the array", () => {
       const container = Container.providesValue("service", [] as number[])
